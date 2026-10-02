@@ -571,28 +571,28 @@ print [ result ]
 
 The current Meitner interpreter does not implement:
 
-- functions
-- function arguments
-- return values
-- loops
-- `else`
-- Boolean literals
-- arrays
-- lists
-- maps or dictionaries
-- objects or structures
-- imports or modules
-- user-defined types
-- general expressions
-- operator precedence
-- subtraction
-- multiplication
-- division
-- string interpolation
-- string escapes
-- nested brace blocks
-- local block scope
-- variable evaluation inside conditions
+# TODO: functions
+# TODO: function arguments
+# TODO: return values
+# TODO: loops
+# TODO: `else`
+# TODO: Boolean literals
+# TODO: arrays
+# TODO: lists
+# TODO: maps or dictionaries
+# TODO: objects or structures
+# TODO: imports or modules
+# TODO: user-defined types
+# TODO: general expressions
+# TODO: operator precedence
+# TODO: subtraction
+# TODO: multiplication
+# TODO: division
+# TODO: string interpolation
+# TODO: string escapes
+# TODO: nested brace blocks
+# TODO: local block scope
+# TODO: variable evaluation inside conditions
 
 These should not be treated as part of the current language unless the interpreter is extended to support them.
 
