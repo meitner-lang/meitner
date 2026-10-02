@@ -34,6 +34,7 @@ while o < len(content):
             if content[o] == "/" and content[o + 1] == "/":
                 while o < len(content) and content[o] != '/':
                     o += 1
+
             elif content[o] == '"':
                 o += 1
                 start = o
@@ -71,6 +72,9 @@ while o < len(content):
 
         o += 1  # Consume the closing brace
 
+    elif content[o] == "/" and content[o + 1] == "/":
+        while o < len(content) and content[o] != '\n':
+            o += 1
     elif content[o] == '"':
         o += 1
         start = o
