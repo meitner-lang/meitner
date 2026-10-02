@@ -31,7 +31,10 @@ while o < len(content):
                 o += 1
                 continue
 
-            if content[o] == '"':
+            if content[o] == "/" and content[o + 1] == "/":
+                while o < len(content) and content[o] != '/':
+                    o += 1
+            elif content[o] == '"':
                 o += 1
                 start = o
 
