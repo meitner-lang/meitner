@@ -593,7 +593,6 @@ The current Meitner interpreter does not implement:
 - nested brace blocks
 - local block scope
 - variable evaluation inside conditions
-- comments
 
 These should not be treated as part of the current language unless the interpreter is extended to support them.
 
