@@ -57,4 +57,10 @@ def run(x, varn, varv):
         elif x[t] == "divvar":
             # divide a variable's value by an input number
             setvar(x[t+2],int(callvar(x[t+2]))/int(x[t+4]))
+        elif x[t] == "subvar":
+            # subtract a numeric value from the variable's current value
+            setvar(x[t+2],int(callvar(x[t+2]))-int(x[t+4]))
+        elif x[t] == "multvar":
+            # multiply a variable's value by an input number
+            setvar(x[t+2],int(callvar(x[t+2]))*int(x[t+4]))
         t += 1
