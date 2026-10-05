@@ -35,9 +35,10 @@ while o < len(content):
                 o += 1
                 continue
 
-            # Ignore comments and preserve quoted text as a single token.
-            if content[o] == "/" and content[o + 1] == "/":
-                while o < len(content) and content[o] != '/':
+            # Ignore comments (they run to the end of the line) and
+            # preserve quoted text as a single token.
+            if content[o] == "/" and o + 1 < len(content) and content[o + 1] == "/":
+                while o < len(content) and content[o] != '\n':
                     o += 1
 
             elif content[o] == '"':
@@ -78,8 +79,8 @@ while o < len(content):
         o += 1  # Consume the closing brace
 
     # Handle comments, quoted strings, brackets, and ordinary tokens.
-    elif content[o] == "/" and content[o + 1] == "/":
-        while o < len(content) and content[o] != '/':
+    elif content[o] == "/" and o + 1 < len(content) and content[o + 1] == "/":
+        while o < len(content) and content[o] != '\n':
             o += 1
     elif content[o] == '"':
         o += 1

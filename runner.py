@@ -26,8 +26,12 @@ def run(x, varn, varv):
                 print(x[t+2])
 
         elif x[t] == "if":
-            # Evaluate the comparison and run its nested block when true.
-            if x[t+2] == "=":
+            # Evaluate the condition and run its nested block when true.
+            # "if true { ... }" has its block at t+2; comparisons like
+            # "if a = b { ... }" have it at t+4.
+            if x[t+1] == "true":
+                run(x[t+2], variable_names, variable_values)
+            elif x[t+2] == "=":
                 if x[t+1] == x[t+3]:
                     run(x[t+4], variable_names, variable_values)
             elif x[t+2] == ">":
@@ -53,7 +57,7 @@ def run(x, varn, varv):
                     makevar(x[t+2],x[t+4])
         elif x[t] == "addvar":
             # Add a numeric value to the variable's current value.
-            setvar(x[t+2],int(x[t+4])+int(callvar(x[t+2])))            
+            setvar(x[t+2],int(x[t+4])+int(callvar(x[t+2])))
         elif x[t] == "divvar":
             # divide a variable's value by an input number
             setvar(x[t+2],int(callvar(x[t+2]))/int(x[t+4]))
