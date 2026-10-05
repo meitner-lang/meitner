@@ -575,8 +575,6 @@ The current Meitner interpreter does not implement:
 # TODO: function arguments
 # TODO: return values
 # TODO: loops
-# TODO: `else`
-# TODO: Boolean literals
 # TODO: arrays
 # TODO: lists
 # TODO: maps or dictionaries
@@ -585,9 +583,6 @@ The current Meitner interpreter does not implement:
 # TODO: user-defined types
 # TODO: general expressions
 # TODO: operator precedence
-# TODO: subtraction
-# TODO: multiplication
-# TODO: division
 # TODO: string interpolation
 # TODO: string escapes
 # TODO: nested brace blocks
