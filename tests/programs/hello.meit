@@ -1,0 +1,8 @@
+// prints the word hello //
+
+print "hello"
+
+if false
+{
+print "world"
+}
