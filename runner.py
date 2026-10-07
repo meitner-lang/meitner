@@ -99,6 +99,7 @@ def compare(left, op, right):
 
 
 def divide(a, b):
+    """Integer (floor) division, so variables always stay whole numbers."""
     if b == 0:
         raise ZeroDivisionError("divvar: cannot divide by zero")
     return a // b

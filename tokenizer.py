@@ -1,6 +1,4 @@
-import sys
-
-import runner as run
+"""Meitner tokenizer: turns source text into a nested list of tokens."""
 
 
 def parse(content, o, nested):
@@ -59,26 +57,7 @@ def parse(content, o, nested):
     return tokens, o
 
 
-# Read the source file that will be tokenized.
-file_name = input("File name: ")
-try:
-    with open(file_name, encoding="utf-8") as file:
-        content = file.read()
-except FileNotFoundError:
-    sys.exit(f"File not found: {file_name}")
-
-tokens, _ = parse(content, 0, nested=False)
-
-# Show the tokens, then pass them to the interpreter.
-print(tokens)
-print()
-print("i will now attempt to run the code")
-print()
-
-variables = {}
-try:
-    run.run(tokens, variables)
-except (SyntaxError, NameError, TypeError, ZeroDivisionError) as error:
-    print(f"Error: {error}")
-except KeyboardInterrupt:
-    print("\nStopped.")
+def tokenize(content):
+    """Tokenize a whole program and return just the token list."""
+    tokens, _ = parse(content, 0, nested=False)
+    return tokens

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meitner"
+dynamic = ["version"]
+description = "A small interpreted programming language with a compact, whitespace-oriented syntax."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Interpreters",
+]
+
+[project.scripts]
+meitner = "meitner.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/<you>/meitner"
+Documentation = "https://github.com/<you>/meitner/blob/main/docs/LANGUAGE.md"
+
+[tool.hatch.version]
+path = "src/meitner/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/meitner"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
