@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from meitner.cli import main
+from meitner.runner import run
 from meitner.tokenizer import tokenize
 
 PROGRAMS = Path(__file__).parent / "programs"
@@ -22,9 +23,21 @@ def test_hello_file(capsys):
 
 
 def test_tokenizer_nested_blocks():
-    assert tokenize("if true { if true { print 1 } }") == [
+    def values(tokens):
+        return [values(token) if isinstance(token, list) else token.value
+                for token in tokens]
+
+    assert values(tokenize("if true { if true { print 1 } }")) == [
         "if", "true", ["if", "true", ["print", "1"]]
     ]
+
+
+def test_runner_accepts_tokenizer_output(capsys):
+    tokens = tokenize('setvar [ total ] 4 loop 2 { addvar [ total ] 3 } print [ total ]')
+
+    run(tokens, {})
+
+    assert capsys.readouterr().out == "10\n"
 
 
 def test_variables_and_arithmetic(tmp_path, capsys):

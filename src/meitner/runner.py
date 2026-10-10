@@ -114,6 +114,26 @@ MATH_COMMANDS = {
 }
 
 
+def _plain_tokens(tokens):
+    """Convert tokenizer Token objects to their values, recursively.
+
+    The tokenizer keeps source locations and token kinds in ``Token``
+    instances, while the interpreter works with token text. Keep block lists
+    nested, because ``{ ... }`` is represented as a nested list by tokenize().
+    Accept plain strings too so callers can continue using hand-written token
+    lists.
+    """
+    result = []
+    for token in tokens:
+        if isinstance(token, list):
+            result.append(_plain_tokens(token))
+        elif hasattr(token, "value") and hasattr(token, "kind"):
+            result.append(token.value)
+        else:
+            result.append(token)
+    return result
+
+
 # ---------- Interpreter ----------
 
 def run(x, variables):
@@ -122,6 +142,7 @@ def run(x, variables):
     Every branch moves `t` to the index of the next command, so tokens that
     belong to a command are never mistaken for new commands.
     """
+    x = _plain_tokens(x)
     t = 0
     while t < len(x):
         command = x[t]
