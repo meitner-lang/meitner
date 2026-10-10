@@ -90,3 +90,171 @@ def test_errors_exit_nonzero(tmp_path, capsys, source, message):
 def test_missing_file(capsys):
     assert main(["does_not_exist.meit"]) == 1
     assert "File not found" in capsys.readouterr().err
+
+@pytest.mark.parametrize("source, expected", [
+    # Empty and ordinary values
+    ('print ""', "\n"),
+    ('print 0', "0\n"),
+    ('print -7', "-7\n"),
+    ('print true\nprint false', "true\nfalse\n"),
+
+    # Variable copying and reassignment
+    (
+        'setvar [ a ] 5\n'
+        'setvar [ b ] [ a ]\n'
+        'print [ b ]',
+        "5\n",
+    ),
+    (
+        'setvar [ x ] 3\n'
+        'setvar [ x ] 9\n'
+        'print [ x ]',
+        "9\n",
+    ),
+
+    # Negative arithmetic and floor division
+    (
+        'setvar [ n ] 5\n'
+        'subvar [ n ] 8\n'
+        'print [ n ]',
+        "-3\n",
+    ),
+    (
+        'setvar [ n ] -7\n'
+        'divvar [ n ] 2\n'
+        'print [ n ]',
+        "-4\n",
+    ),
+
+    # Conditional branches
+    (
+        'if 3 > 2 { print "yes" } '
+        'else { print "no" }',
+        "yes\n",
+    ),
+    (
+        'if 3 < 2 { print "yes" } '
+        'else { print "no" }',
+        "no\n",
+    ),
+
+    # Equality must respect value types
+    (
+        'if "5" = 5 { print "equal" } '
+        'else { print "different" }',
+        "different\n",
+    ),
+
+    # Variables holding booleans
+    (
+        'setvar [ ok ] true\n'
+        'if [ ok ] { print "yes" }',
+        "yes\n",
+    ),
+
+    # Zero and negative loop counts
+    (
+        'loop 0 { print "bad" }\n'
+        'loop -2 { print "bad" }\n'
+        'print "done"',
+        "done\n",
+    ),
+
+    # Nested loops
+    (
+        'loop 2 { loop 3 { print "x" } }',
+        "x\n" * 6,
+    ),
+])
+def test_valid_edge_cases(tmp_path, capsys, source, expected):
+    code, stdout, stderr = run_source(
+        tmp_path, capsys, source
+    )
+
+    assert code == 0, stderr
+    assert stdout == expected
+    assert stderr == ""
+
+@pytest.mark.parametrize("source, expected_error", [
+    # Missing operands
+    (
+        "print",
+        "expected a value",
+    ),
+    (
+        "setvar [ x ]",
+        "expected a value",
+    ),
+
+    # Malformed variable references
+    (
+        "print [ x",
+        "Expected a variable",
+    ),
+    (
+        "setvar x 5",
+        "Expected a variable",
+    ),
+
+    # Invalid arithmetic
+    (
+        "setvar [ x ] nope\naddvar [ x ] 1",
+        "Expected a number",
+    ),
+    (
+        "setvar [ x ] 2\ndivvar [ x ] 0",
+        "divide by zero",
+    ),
+
+    # Invalid condition
+    (
+        "if 1 { print 1 }",
+        "needs true/false",
+    ),
+
+    # Invalid loops
+    (
+        'loop false { print "bad" }',
+        "loop needs a number",
+    ),
+    (
+        "loop 2",
+        "must be followed",
+    ),
+
+    # Unclosed block
+    (
+        "if true { print 3",
+        "Unterminated",
+    ),
+
+    # Unknown command
+    (
+        "not_a_command",
+        "Unknown command",
+    ),
+])
+def test_invalid_programs(
+    tmp_path, capsys, source, expected_error
+):
+    code, stdout, stderr = run_source(
+        tmp_path, capsys, source
+    )
+
+    assert code == 1
+    assert expected_error in stderr
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Tokenizer does not recognize attached comments"
+)
+def test_comment_without_space(tmp_path, capsys):
+    source = 'print 5//comment'
+
+    code, stdout, stderr = run_source(
+        tmp_path, capsys, source
+    )
+
+    assert code == 0
+    assert stdout == "5\n"
+    assert stderr == ""
