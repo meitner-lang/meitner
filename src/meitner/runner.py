@@ -13,6 +13,31 @@ Commands (spaces around [ ], =, and the other tokens are required):
 A <value> is a bare number, "a string", true/false, or [ variable ].
 """
 
+from contextvars import ContextVar
+
+
+# Tracks the source token for the currently executing statement, including
+# during nested block execution.
+_CURRENT_TOKEN = ContextVar("meitner_current_token", default=None)
+
+
+def _token_text(token):
+    """Read token text without replacing its source-aware Token object."""
+    if hasattr(token, "kind") and hasattr(token, "value"):
+        return token.value
+    return token
+
+
+def _add_error_location(error, token):
+    """Attach the executing token's source position to a runtime error."""
+    if getattr(error, "_meitner_located", False):
+        return
+    line = getattr(token, "line", None)
+    column = getattr(token, "column", None)
+    if line is not None and column is not None:
+        error.args = (f"{error} (line {line}, column {column})",)
+        error._meitner_located = True
+
 
 # ---------- Value helpers ----------
 
@@ -41,12 +66,16 @@ def read_value(x, t, variables):
     if t >= len(x):
         raise SyntaxError("Unexpected end of code: expected a value")
 
-    token = x[t]
-    if isinstance(token, list):
+    source_token = x[t]
+    if isinstance(source_token, list):
         raise SyntaxError("Expected a value but found a { } block")
 
+    if getattr(source_token, "kind", None) == "STRING":
+        return _token_text(source_token), t + 1
+
+    token = _token_text(source_token)
     if token == '"':                      # "text" is three tokens: " text "
-        return x[t + 1], t + 3
+        return _token_text(x[t + 1]), t + 3
 
     if token == "[":                      # [ name ] is three tokens too
         name, next_t = read_name(x, t)
@@ -65,9 +94,10 @@ def read_value(x, t, variables):
 
 def read_name(x, t):
     """Read '[ name ]' starting at x[t]. Returns (name, next_index)."""
-    if t + 2 >= len(x) or x[t] != "[" or x[t + 2] != "]":
+    if (t + 2 >= len(x) or _token_text(x[t]) != "["
+            or _token_text(x[t + 2]) != "]"):
         raise SyntaxError("Expected a variable written as [ name ]")
-    return x[t + 1], t + 3
+    return _token_text(x[t + 1]), t + 3
 
 
 def expect_block(x, t, command):
@@ -114,38 +144,30 @@ MATH_COMMANDS = {
 }
 
 
-def _plain_tokens(tokens):
-    """Convert tokenizer Token objects to their values, recursively.
-
-    The tokenizer keeps source locations and token kinds in ``Token``
-    instances, while the interpreter works with token text. Keep block lists
-    nested, because ``{ ... }`` is represented as a nested list by tokenize().
-    Accept plain strings too so callers can continue using hand-written token
-    lists.
-    """
-    result = []
-    for token in tokens:
-        if isinstance(token, list):
-            result.append(_plain_tokens(token))
-        elif hasattr(token, "value") and hasattr(token, "kind"):
-            result.append(token.value)
-        else:
-            result.append(token)
-    return result
-
-
 # ---------- Interpreter ----------
 
 def run(x, variables):
+    """Run tokens while retaining source metadata for runtime diagnostics."""
+    previous = _CURRENT_TOKEN.set(None)
+    try:
+        return _run_tokens(x, variables)
+    except (SyntaxError, NameError, TypeError, ZeroDivisionError) as error:
+        _add_error_location(error, _CURRENT_TOKEN.get())
+        raise
+    finally:
+        _CURRENT_TOKEN.reset(previous)
+
+
+def _run_tokens(x, variables):
     """Run a list of tokens. `variables` is a dict shared with nested blocks.
 
     Every branch moves `t` to the index of the next command, so tokens that
     belong to a command are never mistaken for new commands.
     """
-    x = _plain_tokens(x)
     t = 0
     while t < len(x):
-        command = x[t]
+        _CURRENT_TOKEN.set(x[t])
+        command = _token_text(x[t])
 
         if command == "print":
             value, t = read_value(x, t + 1, variables)
@@ -177,7 +199,7 @@ def run(x, variables):
                 # Form 2: if <value> <op> <value> { ... }
                 if i >= len(x):
                     raise SyntaxError("Unexpected end of code in 'if'")
-                op = x[i]
+                op = _token_text(x[i])
                 right, i = read_value(x, i + 1, variables)
                 condition = compare(left, op, right)
 
@@ -186,7 +208,7 @@ def run(x, variables):
             # An else exists if the if-block is followed by: else { ... }
             has_else = (
                 i + 2 < len(x)
-                and x[i + 1] == "else"
+                and _token_text(x[i + 1]) == "else"
                 and isinstance(x[i + 2], list)
             )
 

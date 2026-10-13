@@ -40,6 +40,17 @@ def test_runner_accepts_tokenizer_output(capsys):
     assert capsys.readouterr().out == "10\n"
 
 
+def test_runtime_error_keeps_source_location(tmp_path, capsys):
+    code, _, err = run_source(
+        tmp_path,
+        capsys,
+        "setvar [ n ] 1\ndivvar [ n ] 0",
+    )
+
+    assert code == 1
+    assert "line 2, column 1" in err
+
+
 def test_variables_and_arithmetic(tmp_path, capsys):
     code, out, _ = run_source(tmp_path, capsys, """
 setvar [ n ] 10
