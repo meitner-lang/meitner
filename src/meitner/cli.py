@@ -24,6 +24,18 @@ def main(argv=None):
     except FileNotFoundError:
         print(f"File not found: {args.file}", file=sys.stderr)
         return 1
+    except IsADirectoryError:
+        print(f"Expected a source file, got a directory: {args.file}", file=sys.stderr)
+        return 1
+    except PermissionError:
+        print(f"Permission denied reading source file: {args.file}", file=sys.stderr)
+        return 1
+    except UnicodeError:
+        print(f"Source file is not valid UTF-8: {args.file}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Could not read source file {args.file}: {error}", file=sys.stderr)
+        return 1
 
     try:
         tokens = tokenize(content)

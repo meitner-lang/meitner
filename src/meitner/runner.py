@@ -28,15 +28,18 @@ def _token_text(token):
     return token
 
 
-def _add_error_location(error, token):
+def _add_error_location(error, token, block=None):
     """Attach the executing token's source position to a runtime error."""
     if getattr(error, "_meitner_located", False):
         return
+    error.token = token
+    error.block = block
     line = getattr(token, "line", None)
     column = getattr(token, "column", None)
     if line is not None and column is not None:
+        error.location = (line, column)
         error.args = (f"{error} (line {line}, column {column})",)
-        error._meitner_located = True
+    error._meitner_located = True
 
 
 # ---------- Value helpers ----------
@@ -75,6 +78,8 @@ def read_value(x, t, variables):
 
     token = _token_text(source_token)
     if token == '"':                      # "text" is three tokens: " text "
+        if t + 2 >= len(x) or _token_text(x[t + 2]) != '"':
+            raise SyntaxError("Unterminated quoted string")
         return _token_text(x[t + 1]), t + 3
 
     if token == "[":                      # [ name ] is three tokens too
@@ -95,6 +100,7 @@ def read_value(x, t, variables):
 def read_name(x, t):
     """Read '[ name ]' starting at x[t]. Returns (name, next_index)."""
     if (t + 2 >= len(x) or _token_text(x[t]) != "["
+            or isinstance(x[t + 1], list)
             or _token_text(x[t + 2]) != "]"):
         raise SyntaxError("Expected a variable written as [ name ]")
     return _token_text(x[t + 1]), t + 3
@@ -118,6 +124,7 @@ def same_value(left, right):
 
 
 def compare(left, op, right):
+    op = _token_text(op)
     if op == "=":
         return same_value(left, right)
     if op == "!=":
@@ -152,7 +159,8 @@ def run(x, variables):
     try:
         return _run_tokens(x, variables)
     except (SyntaxError, NameError, TypeError, ZeroDivisionError) as error:
-        _add_error_location(error, _CURRENT_TOKEN.get())
+        _add_error_location(error, _CURRENT_TOKEN.get(),
+                            x if hasattr(x, "open_brace") else None)
         raise
     finally:
         _CURRENT_TOKEN.reset(previous)

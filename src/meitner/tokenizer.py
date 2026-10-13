@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from bisect import bisect_right
 
 @dataclass
 class Token:
@@ -6,6 +7,27 @@ class Token:
     value: str
     line: int
     column: int
+
+
+class Block(list):
+    """A token list with the locations of its surrounding braces."""
+
+    def __init__(self, tokens, open_brace, close_brace):
+        super().__init__(tokens)
+        self.open_brace = open_brace
+        self.close_brace = close_brace
+
+    def __repr__(self):
+        return (f"Block({list.__repr__(self)}, open_brace={self.open_brace!r}, "
+                f"close_brace={self.close_brace!r})")
+
+    @property
+    def line(self):
+        return self.open_brace.line
+
+    @property
+    def column(self):
+        return self.open_brace.column
 
 def get_location(content, position):
     line = content.count("\n", 0, position) + 1
@@ -19,12 +41,19 @@ def get_location(content, position):
 """Meitner tokenizer: turns source text into a nested list of tokens."""
 
 
-def parse(content, o, nested):
+def parse(content, o, nested, _line_starts=None, _open_brace=None):
     """Turn source text into tokens, starting at index o.
 
     A { } block becomes a nested list, parsed by calling this function again,
     so blocks can contain other blocks. Returns (tokens, next_index).
     """
+    if _line_starts is None:
+        _line_starts = [0] + [i + 1 for i, ch in enumerate(content) if ch == "\n"]
+
+    def location(position):
+        line_index = bisect_right(_line_starts, position) - 1
+        return line_index + 1, position - _line_starts[line_index] + 1
+
     tokens = []
 
     while o < len(content):
@@ -39,13 +68,18 @@ def parse(content, o, nested):
                 o += 1
 
         elif ch == "{":
-            block, o = parse(content, o + 1, nested=True)
+            line, column = location(o)
+            opening = Token("SYMBOL", "{", line, column)
+            block, o = parse(content, o + 1, nested=True,
+                             _line_starts=_line_starts, _open_brace=opening)
             tokens.append(block)
 
         elif ch == "}":
             if not nested:
                 raise SyntaxError("Unexpected '}' with no matching '{'")
-            return tokens, o + 1          # end of this block
+            line, column = location(o)
+            closing = Token("SYMBOL", "}", line, column)
+            return Block(tokens, _open_brace, closing), o + 1
 
         elif ch == '"':
             end = content.find('"', o + 1)
@@ -53,9 +87,9 @@ def parse(content, o, nested):
             if end == -1:
                 raise SyntaxError("Unterminated quoted string")
 
-            open_line, open_column = get_location(content, o)
-            text_line, text_column = get_location(content, o + 1)
-            close_line, close_column = get_location(content, end)
+            open_line, open_column = location(o)
+            text_line, text_column = location(o + 1)
+            close_line, close_column = location(end)
 
             tokens.extend([
                 Token("SYMBOL", '"', open_line, open_column),
@@ -66,7 +100,7 @@ def parse(content, o, nested):
             o = end + 1
 
         elif ch == "[" or ch == "]":
-            line, column = get_location(content, o)
+            line, column = location(o)
 
             tokens.append(
                 Token(
@@ -89,7 +123,7 @@ def parse(content, o, nested):
             ):
                 o += 1
 
-            line, column = get_location(content, start)
+            line, column = location(start)
 
             tokens.append(
                 Token(
