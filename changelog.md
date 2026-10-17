@@ -25,6 +25,16 @@ While the version is below 1.0, minor versions may include breaking changes.
 - `//` line comments
 - Command-line interface: `meitner <file.meit>`, with `--tokens` and `--version` flags
 
+### Fixed
+
+- Attached `//` comments now end preceding words.
+- Source positions and comments now handle CR-only and Unicode line separators.
+- Quoted `"forever"` and variables containing that text no longer start infinite loops.
+- Blocks beyond 128 levels and integers beyond 4,300 digits report language errors instead of Python failures or silent type changes.
+- Arithmetic results are checked against the integer limit before storage.
+- Invalid commands in skipped branches are rejected before execution.
+- The distribution name is `meitner-lang`, avoiding an unrelated PyPI project named `meitner`.
+
 ### Known limitations
 
 - No functions, function arguments, or return values
