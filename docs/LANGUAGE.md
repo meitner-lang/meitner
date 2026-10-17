@@ -6,6 +6,8 @@ This document describes the Meitner language as implemented by the current inter
 
 A program is a sequence of whitespace-separated tokens. Spaces and line breaks are equivalent outside quoted strings, so conventional line-based formatting is recommended but not required.
 
+Source locations count LF, CRLF, CR, and Unicode line separators as line breaks.
+
 Comments start with `//` and run to the end of the line:
 
 ```meitner
@@ -13,7 +15,7 @@ Comments start with `//` and run to the end of the line:
 print "hello"   // so is this
 ```
 
-Because words are split on whitespace, operators and brackets must be written as separate tokens: `[ x ]`, `a = b`, `1 > 2`.
+Operators must be written as separate tokens: `a = b`, `1 > 2`. Brackets and braces are recognized as delimiters even without spaces, though `[ x ]` remains the clearest variable notation. A `//` comment may start immediately after a word, as in `print 5// comment`.
 
 ## 2. Special characters
 
@@ -36,6 +38,8 @@ A value is one of:
 | any other bare word | plain word (a string) | `hello` |
 
 A quoted `"true"` is a string, not a boolean. A quoted `"5"` is a string, not the integer `5`, though arithmetic can still convert it.
+
+Decimal integers are limited to 4,300 digits. Larger numeric literals and arithmetic results are errors instead of silently becoming text or raising Python conversion errors.
 
 Booleans print as `true` / `false`.
 
@@ -145,15 +149,17 @@ loop forever {
 }
 ```
 
-Runs until the program is interrupted with Ctrl+C. There is no `break` yet.
+Runs until the program is interrupted with Ctrl+C. Only the bare word `forever` has this meaning; quoted `"forever"` and a variable containing that text are invalid loop counts. There is no `break` yet.
 
 ## 9. Blocks
 
-A block is `{ ... }` containing statements. Blocks are used as bodies of `if`, `else` and `loop`, and can be nested to any depth. They share the global variable environment.
+A block is `{ ... }` containing statements. Blocks are used as bodies of `if`, `else` and `loop`, and can be nested up to 128 levels. They share the global variable environment.
 
 ## 10. Errors
 
 Errors stop the program and print a message to standard error. The process exits with status 1. Common errors: undefined variable, unknown command, unterminated string or block, non-numeric value in arithmetic, division by zero.
+
+The interpreter checks statement structure in all blocks before execution. An invalid command in a branch that would not run is still a syntax error. Infinite loops are an intentional language construct; Meitner is not a sandbox for untrusted programs and does not impose an execution-time limit.
 
 ## 11. Not yet implemented
 

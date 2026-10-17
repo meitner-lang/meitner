@@ -19,6 +19,12 @@ from contextvars import ContextVar
 # Tracks the source token for the currently executing statement, including
 # during nested block execution.
 _CURRENT_TOKEN = ContextVar("meitner_current_token", default=None)
+_VALIDATED = ContextVar("meitner_validated", default=False)
+
+# Keep arithmetic below Python's decimal conversion limit on supported
+# versions and prevent a single statement from creating enormous integers.
+MAX_INTEGER_DIGITS = 4300
+MAX_INTEGER_BITS = 14285
 
 
 def _token_text(token):
@@ -48,16 +54,38 @@ def to_int(value):
     """Convert a value to int for arithmetic, rejecting booleans and text."""
     if isinstance(value, bool):
         raise TypeError("Cannot use a boolean in arithmetic")
+    if isinstance(value, str) and _decimal_digits(value) > MAX_INTEGER_DIGITS:
+        raise TypeError("Integer value is too large")
     try:
-        return int(value)
+        return _checked_int(int(value))
     except ValueError:
-        raise TypeError(f"Expected a number, got: {value}")
+        raise TypeError(f"Expected a number, got: {value[:80] if isinstance(value, str) else value}")
+
+
+def _decimal_digits(value):
+    """Count digits only for decimal-looking text; other words stay words."""
+    digits = value.lstrip("+-").replace("_", "")
+    return len(digits) if digits.isdecimal() else 0
+
+
+def _checked_int(value):
+    if value.bit_length() > MAX_INTEGER_BITS:
+        raise TypeError("Integer value is too large")
+    if value.bit_length() == MAX_INTEGER_BITS:
+        try:
+            if len(str(value).lstrip("-")) > MAX_INTEGER_DIGITS:
+                raise TypeError("Integer value is too large")
+        except ValueError:
+            raise TypeError("Integer value is too large")
+    return value
 
 
 def format_value(value):
     """Booleans print as lowercase Meitner literals, not Python's True/False."""
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, int):
+        return _checked_int(value)
     return value
 
 
@@ -91,8 +119,10 @@ def read_value(x, t, variables):
     if token == "true" or token == "false":
         return token == "true", t + 1
 
+    if isinstance(token, str) and _decimal_digits(token) > MAX_INTEGER_DIGITS:
+        raise SyntaxError("Integer literal is too large")
     try:                                  # bare numbers become ints
-        return int(token), t + 1
+        return _checked_int(int(token)), t + 1
     except ValueError:
         return token, t + 1               # anything else stays a plain word
 
@@ -151,18 +181,88 @@ MATH_COMMANDS = {
 }
 
 
+def _skip_value(tokens, index):
+    """Find the end of a value without evaluating variables or expressions."""
+    if index >= len(tokens):
+        raise SyntaxError("Unexpected end of code: expected a value")
+    token = tokens[index]
+    if isinstance(token, list):
+        raise SyntaxError("Expected a value but found a { } block")
+    if _token_text(token) == '"':
+        if (index + 2 >= len(tokens)
+                or isinstance(tokens[index + 1], list)
+                or _token_text(tokens[index + 2]) != '"'):
+            raise SyntaxError("Unterminated quoted string")
+        return index + 3
+    if _token_text(token) == "[":
+        _, index = read_name(tokens, index)
+        return index
+    return index + 1
+
+
+def _validate_tokens(tokens):
+    """Check all statement shapes once, including blocks that will be skipped."""
+    index = 0
+    while index < len(tokens):
+        command_token = tokens[index]
+        command = _token_text(command_token)
+        _CURRENT_TOKEN.set(command_token)
+        try:
+            if isinstance(command_token, list):
+                raise SyntaxError("Unexpected { } block without a command")
+            if command == "print":
+                index = _skip_value(tokens, index + 1)
+            elif command == "setvar" or command in MATH_COMMANDS:
+                _, index = read_name(tokens, index + 1)
+                index = _skip_value(tokens, index)
+            elif command == "if":
+                index = _skip_value(tokens, index + 1)
+                if index >= len(tokens) or not isinstance(tokens[index], list):
+                    if index >= len(tokens):
+                        raise SyntaxError("Unexpected end of code in 'if'")
+                    operator = _token_text(tokens[index])
+                    if operator not in ("=", "!=", ">", "<"):
+                        raise SyntaxError(f"Unknown comparison operator: {operator}")
+                    index = _skip_value(tokens, index + 1)
+                block = expect_block(tokens, index, "if")
+                _validate_tokens(block)
+                index += 1
+                if index < len(tokens) and _token_text(tokens[index]) == "else":
+                    block = expect_block(tokens, index + 1, "else")
+                    _validate_tokens(block)
+                    index += 2
+            elif command == "loop":
+                index = _skip_value(tokens, index + 1)
+                block = expect_block(tokens, index, "loop")
+                _validate_tokens(block)
+                index += 1
+            else:
+                raise SyntaxError(f"Unknown command: {command}")
+        except SyntaxError as error:
+            _add_error_location(error, command_token,
+                                tokens if hasattr(tokens, "open_brace") else None)
+            raise
+
+
 # ---------- Interpreter ----------
 
 def run(x, variables):
     """Run tokens while retaining source metadata for runtime diagnostics."""
     previous = _CURRENT_TOKEN.set(None)
+    validated = _VALIDATED.get()
+    validation_context = None
     try:
+        if not validated:
+            _validate_tokens(x)
+            validation_context = _VALIDATED.set(True)
         return _run_tokens(x, variables)
     except (SyntaxError, NameError, TypeError, ZeroDivisionError) as error:
         _add_error_location(error, _CURRENT_TOKEN.get(),
                             x if hasattr(x, "open_brace") else None)
         raise
     finally:
+        if validation_context is not None:
+            _VALIDATED.reset(validation_context)
         _CURRENT_TOKEN.reset(previous)
 
 
@@ -191,9 +291,9 @@ def _run_tokens(x, variables):
             operand, t = read_value(x, t, variables)
             if name not in variables:
                 raise NameError(f"Undefined variable: {name}")
-            variables[name] = MATH_COMMANDS[command](
+            variables[name] = _checked_int(MATH_COMMANDS[command](
                 to_int(variables[name]), to_int(operand)
-            )
+            ))
 
         elif command == "if":
             left, i = read_value(x, t + 1, variables)
@@ -229,10 +329,12 @@ def _run_tokens(x, variables):
             t = i + 3 if has_else else i + 1
 
         elif command == "loop":
+            count_token = x[t + 1]
             count, i = read_value(x, t + 1, variables)
             block = expect_block(x, i, "loop")
 
-            if count == "forever":
+            if (_token_text(count_token) == "forever"
+                    and getattr(count_token, "kind", "WORD") == "WORD"):
                 # No break command yet, so this runs until you press Ctrl+C.
                 while True:
                     run(block, variables)

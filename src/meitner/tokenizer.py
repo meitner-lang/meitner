@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from bisect import bisect_right
 
+MAX_BLOCK_DEPTH = 128
+
 @dataclass
 class Token:
     kind: str
@@ -29,26 +31,39 @@ class Block(list):
     def column(self):
         return self.open_brace.column
 
+def _compute_line_starts(content):
+    """Build line offsets, counting CRLF as one break and Unicode separators."""
+    starts = [0]
+    index = 0
+    while index < len(content):
+        ch = content[index]
+        if ch == "\r":
+            if index + 1 < len(content) and content[index + 1] == "\n":
+                index += 1
+            starts.append(index + 1)
+        elif ch in "\n\x85\u2028\u2029":
+            starts.append(index + 1)
+        index += 1
+    return starts
+
+
 def get_location(content, position):
-    line = content.count("\n", 0, position) + 1
-
-    last_newline = content.rfind("\n", 0, position)
-    column = position - last_newline
-
-    return line, column
+    starts = _compute_line_starts(content)
+    line_index = bisect_right(starts, position) - 1
+    return line_index + 1, position - starts[line_index] + 1
 
 
 """Meitner tokenizer: turns source text into a nested list of tokens."""
 
 
-def parse(content, o, nested, _line_starts=None, _open_brace=None):
+def parse(content, o, nested, _line_starts=None, _open_brace=None, _depth=0):
     """Turn source text into tokens, starting at index o.
 
     A { } block becomes a nested list, parsed by calling this function again,
     so blocks can contain other blocks. Returns (tokens, next_index).
     """
     if _line_starts is None:
-        _line_starts = [0] + [i + 1 for i, ch in enumerate(content) if ch == "\n"]
+        _line_starts = _compute_line_starts(content)
 
     def location(position):
         line_index = bisect_right(_line_starts, position) - 1
@@ -64,14 +79,17 @@ def parse(content, o, nested, _line_starts=None, _open_brace=None):
 
         elif content.startswith("//", o):
             # Comments run to the end of the line.
-            while o < len(content) and content[o] != "\n":
+            while o < len(content) and content[o] not in "\n\r\x85\u2028\u2029":
                 o += 1
 
         elif ch == "{":
+            if _depth >= MAX_BLOCK_DEPTH:
+                raise SyntaxError(f"Block nesting exceeds {MAX_BLOCK_DEPTH} levels")
             line, column = location(o)
             opening = Token("SYMBOL", "{", line, column)
             block, o = parse(content, o + 1, nested=True,
-                             _line_starts=_line_starts, _open_brace=opening)
+                             _line_starts=_line_starts, _open_brace=opening,
+                             _depth=_depth + 1)
             tokens.append(block)
 
         elif ch == "}":
@@ -120,6 +138,7 @@ def parse(content, o, nested, _line_starts=None, _open_brace=None):
                 o < len(content)
                 and not content[o].isspace()
                 and content[o] not in '"{}[]'
+                and not content.startswith("//", o)
             ):
                 o += 1
 
