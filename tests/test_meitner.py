@@ -268,10 +268,6 @@ def test_invalid_programs(
     assert code == 1
     assert expected_error in stderr
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Tokenizer does not recognize attached comments"
-)
 def test_comment_without_space(tmp_path, capsys):
     source = 'print 5//comment'
 

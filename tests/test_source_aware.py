@@ -184,23 +184,17 @@ def test_cli_missing_file_reports_stderr(tmp_path, capsys):
     assert "File not found" in captured.err
 
 
-@pytest.mark.xfail(strict=True, raises=IsADirectoryError,
-                   reason="CLI directory error handling is task #9")
-def test_cli_directory_path_expected_failure(tmp_path):
+def test_cli_directory_path(tmp_path):
     assert main([str(tmp_path)]) == 1
 
 
-@pytest.mark.xfail(strict=True, raises=UnicodeDecodeError,
-                   reason="CLI invalid UTF-8 handling is task #9")
-def test_cli_invalid_utf8_expected_failure(tmp_path):
+def test_cli_invalid_utf8(tmp_path):
     program = tmp_path / "invalid.meit"
     program.write_bytes(b"\xff")
     assert main([str(program)]) == 1
 
 
-@pytest.mark.xfail(strict=True, raises=PermissionError,
-                   reason="CLI permission error handling is task #9")
-def test_cli_permission_denied_expected_failure(tmp_path):
+def test_cli_permission_denied(tmp_path):
     program = tmp_path / "restricted.meit"
     program.write_text("print 1", encoding="utf-8")
     program.chmod(0)
